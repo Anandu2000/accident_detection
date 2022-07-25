@@ -1,0 +1,218 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:accident_detection/calculations/homeArguments.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:accident_detection/calculations/homeArguments.dart';
+
+
+class CountDownTimer extends StatefulWidget {
+  @override
+  _CountDownTimerState createState() => _CountDownTimerState();
+}
+
+class _CountDownTimerState extends State<CountDownTimer>
+    with TickerProviderStateMixin {
+  late AnimationController controller;
+
+  String get timerString {
+    Duration duration = controller.duration! * controller.value;
+    return '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  static AudioCache _player = AudioCache();
+  static const _audioPath = "audio/emergency-alarm.mp3";
+  AudioPlayer _audioPlayer = AudioPlayer();
+
+  Future<AudioPlayer> playAudio() async {
+    return _player.play(_audioPath);
+  }
+
+  void _stop() {
+    if (_audioPlayer != null) {
+      _audioPlayer.stop();
+    }
+  }
+  @override
+  void initState() {
+    playAudio().then((player) {
+      _audioPlayer = player;
+    });
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: 10),                    //todo: change seconds value
+    );
+    if (controller.isAnimating) {
+      controller.stop();
+    } else {
+      controller.reverse(
+          from: controller.value == 0.0
+              ? 1.0
+              : controller.value);
+    }
+
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final args = ModalRoute.of(context)!.settings.arguments;
+    print(args);
+
+    ThemeData themeData = Theme.of(context);
+    return Scaffold(
+      backgroundColor: Colors.white10,
+      body: AnimatedBuilder(
+          animation: controller,
+          builder: (context, child) {
+            return Stack(
+              children: <Widget>[
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child:
+                  Container(
+                    color: Colors.amber,
+                    height:
+                    controller.value * MediaQuery.of(context).size.height,
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Expanded(
+                        child: Align(
+                          alignment: FractionalOffset.center,
+                          child: AspectRatio(
+                            aspectRatio: 1.0,
+                            child: Stack(
+                              children: <Widget>[
+                                Positioned.fill(
+                                  child: CustomPaint(
+                                      painter: CustomTimerPainter(
+                                        animation: controller,
+                                        backgroundColor: Colors.white,
+                                        color: themeData.indicatorColor,
+                                      )),
+                                ),
+                                Align(
+                                  alignment: FractionalOffset.center,
+                                  child: Column(
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.center,
+                                    children: <Widget>[
+                                      const Text(
+                                        "Reaching for Help in",
+                                        style: TextStyle(
+                                            fontSize: 20.0,
+                                            color: Colors.white),
+                                      ),
+                                      Text(
+                                        timerString,
+                                        style: const TextStyle(
+                                            fontSize: 112.0,
+                                            color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: FloatingActionButton.extended(
+                          icon: Icon(Icons.cancel),
+                          backgroundColor: Colors.red,
+                          onPressed: (){
+                            _audioPlayer.stop();
+                            Navigator.pop(context);
+                          },
+                          label: Text('Cancel'),
+                        ),
+                      ),
+                      AnimatedBuilder(
+                          animation: controller,
+                          builder: (context, child) {
+                            jumpto(args);
+                            return FloatingActionButton.extended(
+                                onPressed: () {
+
+                                  if (controller.isAnimating) {
+                                    controller.stop();
+                                    _audioPlayer.pause();
+                                  } else {
+                                    controller.reverse(
+                                        from: controller.value == 0.0
+                                            ? 1.0
+                                            : controller.value);
+                                  }
+                                },
+                                icon: Icon(controller.isAnimating
+                                    ? Icons.pause
+                                    : Icons.play_arrow),
+                                label: Text(
+                                    controller.isAnimating ? "Pause" : "Play"));
+                          }),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }),
+    );
+  }
+  void jumpto(var type){
+    if(controller.value == 0){
+      Timer(Duration(milliseconds: 100),(){
+        _audioPlayer.stop();
+        Navigator.pushNamed(
+          context,
+          '/send',
+          arguments: type
+        );
+      });
+    }
+  }
+}
+
+
+
+class CustomTimerPainter extends CustomPainter {
+  CustomTimerPainter({
+    required this.animation,
+    required this.backgroundColor,
+    required this.color,
+  }) : super(repaint: animation);
+
+  final Animation<double> animation;
+  final Color backgroundColor, color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    Paint paint = Paint()
+      ..color = backgroundColor
+      ..strokeWidth = 10.0
+      ..strokeCap = StrokeCap.butt
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawCircle(size.center(Offset.zero), size.width / 2.0, paint);
+    paint.color = color;
+    double progress = (1.0 - animation.value) * 2 * math.pi;
+    canvas.drawArc(Offset.zero & size, math.pi * 1.5, -progress, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomTimerPainter old) {
+    return animation.value != old.animation.value ||
+        color != old.color ||
+        backgroundColor != old.backgroundColor;
+  }
+}
